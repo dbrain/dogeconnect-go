@@ -164,10 +164,11 @@ type ParsedItem struct {
 	TaxKoinu      koinu.Koinu
 }
 
-// ParsedOutput is a ConnectOutput with a parsed koinu amount.
+// ParsedOutput is a ConnectOutput with parsed fields.
 type ParsedOutput struct {
 	ConnectOutput
-	AmountKoinu koinu.Koinu
+	AmountKoinu koinu.Koinu // set for p2pkh outputs
+	DataBytes   []byte      // set for data outputs
 }
 
 // ParsedSubmission is a PaymentSubmission with decoded transaction bytes.
@@ -325,12 +326,33 @@ func (item ConnectItem) Parse() (ParsedItem, FieldErrors) {
 func (o ConnectOutput) Parse() (ParsedOutput, FieldErrors) {
 	var errs FieldErrors
 	p := ParsedOutput{ConnectOutput: o}
-	errs.Add(checkNonEmpty("address", o.Address))
-	var fe *FieldError
-	p.AmountKoinu, fe = parseRequiredKoinu("amount", o.Amount)
-	errs.Add(fe)
-	if fe == nil && p.AmountKoinu <= 0 {
-		errs.Add(fieldErr("amount", "must be positive"))
+	switch o.Type {
+	case "", OutputTypeP2PKH:
+		errs.Add(checkNonEmpty("address", o.Address))
+		var fe *FieldError
+		p.AmountKoinu, fe = parseRequiredKoinu("amount", o.Amount)
+		errs.Add(fe)
+		if fe == nil && p.AmountKoinu <= 0 {
+			errs.Add(fieldErr("amount", "must be positive"))
+		}
+		if o.Data != "" {
+			errs.Add(fieldErr("data", "not allowed for p2pkh output"))
+		}
+	case OutputTypeData:
+		if o.Address != "" {
+			errs.Add(fieldErr("address", "not allowed for data output"))
+		}
+		if o.Amount != "" {
+			errs.Add(fieldErr("amount", "not allowed for data output"))
+		}
+		var fe *FieldError
+		p.DataBytes, fe = parseRequiredHex("data", o.Data)
+		errs.Add(fe)
+		if fe == nil && len(p.DataBytes) > 80 {
+			errs.Add(fieldErr("data", fmt.Sprintf("payload too large: %d bytes, max 80", len(p.DataBytes))))
+		}
+	default:
+		errs.Add(fieldErr("type", "invalid output type"))
 	}
 	return p, errs
 }

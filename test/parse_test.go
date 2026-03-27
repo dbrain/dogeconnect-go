@@ -340,10 +340,35 @@ func TestOutputParseValid(t *testing.T) {
 	}
 }
 
+func TestDataOutputValid(t *testing.T) {
+	o := dogeconnectgo.ConnectOutput{
+		Type: dogeconnectgo.OutputTypeData,
+		Data: "deadbeef",
+	}
+	p, errs := o.Parse()
+	requireNoErrors(t, errs)
+	if len(p.DataBytes) != 4 {
+		t.Errorf("expected 4 DataBytes, got %d", len(p.DataBytes))
+	}
+	if p.AmountKoinu != 0 {
+		t.Errorf("AmountKoinu should be 0 for data output, got %d", p.AmountKoinu)
+	}
+}
+
+func TestDataOutputMaxPayload(t *testing.T) {
+	// exactly 80 bytes (160 hex chars) — valid
+	o := dogeconnectgo.ConnectOutput{
+		Type: dogeconnectgo.OutputTypeData,
+		Data: "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+	}
+	_, errs := o.Parse()
+	requireNoErrors(t, errs)
+}
+
 func TestOutputParseErrors(t *testing.T) {
 	tests := []struct {
-		name  string
-		mod   func(*dogeconnectgo.ConnectOutput)
+		name string
+		mod  func(*dogeconnectgo.ConnectOutput)
 		field string
 	}{
 		{"empty address", func(o *dogeconnectgo.ConnectOutput) { o.Address = "" }, "address"},
@@ -351,6 +376,36 @@ func TestOutputParseErrors(t *testing.T) {
 		{"bad amount", func(o *dogeconnectgo.ConnectOutput) { o.Amount = "abc" }, "amount"},
 		{"zero amount", func(o *dogeconnectgo.ConnectOutput) { o.Amount = "0" }, "amount"},
 		{"negative amount", func(o *dogeconnectgo.ConnectOutput) { o.Amount = "-1" }, "amount"},
+		{"p2pkh with data field", func(o *dogeconnectgo.ConnectOutput) { o.Data = "deadbeef" }, "data"},
+		{"unknown type", func(o *dogeconnectgo.ConnectOutput) { o.Type = "script" }, "type"},
+		{"data output missing data", func(o *dogeconnectgo.ConnectOutput) {
+			o.Type = dogeconnectgo.OutputTypeData
+			o.Address = ""
+			o.Amount = ""
+		}, "data"},
+		{"data output odd hex", func(o *dogeconnectgo.ConnectOutput) {
+			o.Type = dogeconnectgo.OutputTypeData
+			o.Address = ""
+			o.Amount = ""
+			o.Data = "abc"
+		}, "data"},
+		{"data output too large", func(o *dogeconnectgo.ConnectOutput) {
+			o.Type = dogeconnectgo.OutputTypeData
+			o.Address = ""
+			o.Amount = ""
+			// 81 bytes = 162 hex chars
+			o.Data = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+		}, "data"},
+		{"data output with address", func(o *dogeconnectgo.ConnectOutput) {
+			o.Type = dogeconnectgo.OutputTypeData
+			o.Data = "deadbeef"
+			o.Amount = ""
+		}, "address"},
+		{"data output with amount", func(o *dogeconnectgo.ConnectOutput) {
+			o.Type = dogeconnectgo.OutputTypeData
+			o.Data = "deadbeef"
+			o.Address = ""
+		}, "amount"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
