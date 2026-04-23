@@ -112,7 +112,9 @@ func DogeConnectURI(connectURL string, pubKey []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid connect URL: %w", err)
 	}
-
+	if u.Scheme != "https" {
+		return "", fmt.Errorf("invalid connect URL: must be an https URL")
+	}
 	q := u.Query()
 	q.Set("h", pkHash)
 	u.RawQuery = q.Encode()

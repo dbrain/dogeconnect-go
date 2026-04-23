@@ -148,6 +148,51 @@ func TestParseDogeConnectURIErrors(t *testing.T) {
 	}
 }
 
+func TestDogeConnectURIWithQueryParams(t *testing.T) {
+	// connectURL already has a query string — must not produce a double-? URI
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	uri, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1?foo=bar", pubKey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// must be parseable (validates the URI is well-formed)
+	if _, err := dogeconnectgo.ParseDogeConnectURI(uri); err != nil {
+		t.Errorf("produced unparseable URI %q: %v", uri, err)
+	}
+	// must contain exactly one '?'
+	count := 0
+	for _, c := range uri {
+		if c == '?' {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly one '?' in URI, got %d: %q", count, uri)
+	}
+}
+
+func TestDogeConnectURINotHTTPS(t *testing.T) {
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	_, err := dogeconnectgo.DogeConnectURI("http://example.com/dc/1", pubKey)
+	if err == nil {
+		t.Error("expected error for non-https URL, got nil")
+	}
+}
+
+func TestDogeConnectURIBadPubKey(t *testing.T) {
+	_, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1", []byte{1, 2, 3})
+	if err == nil {
+		t.Error("expected error for short pubkey, got nil")
+	}
+}
+
+func TestDogecoinURIBadPubKey(t *testing.T) {
+	_, err := dogeconnectgo.DogecoinURI("DPD7uK4B1kRmbfGmytBhG1DZjaMWNfbpwY", "1.0", "https://example.com/dc/1", []byte{1, 2, 3})
+	if err == nil {
+		t.Error("expected error for short pubkey, got nil")
+	}
+}
+
 func TestSlashInDC(t *testing.T) {
 	connectURL := "example.com/dc/1QAB"
 	uri := "dogecoin:DPD7uK4B1kRmbfGmytBhG1DZjaMWNfbpwY?amount=12.25&dc=example.com/dc/1QAB&h=72b-LVh5K_mm7zyN9PXO"
