@@ -104,12 +104,20 @@ func ParseDogeConnectURI(dogeconnectURI string) (res DogeURI, err error) {
 // The connectURL should include the https:// prefix (which is stripped per spec).
 // pubKey must be a 32-byte BIP-340 X-only public key.
 func DogeConnectURI(connectURL string, pubKey []byte) (string, error) {
-	connectURL = strings.TrimPrefix(connectURL, "https://")
 	pkHash, err := pubKeyHashStr(pubKey)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("dogeconnect:%s?h=%s", connectURL, pkHash), nil
+	u, err := url.Parse(connectURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid connect URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("h", pkHash)
+	u.RawQuery = q.Encode()
+	withoutScheme := strings.TrimPrefix(u.String(), "https://")
+	return "dogeconnect:" + withoutScheme, nil
 }
 
 // pubKeyHashStr encodes the first 15 bytes of the SHA256 of the Gateway Public Key
