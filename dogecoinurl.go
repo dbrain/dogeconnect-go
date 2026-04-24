@@ -72,6 +72,57 @@ func DogecoinURI(payToAddress string, amount string, connectURL string, pubKey [
 	return fmt.Sprintf("dogecoin:%s?amount=%s&dc=%s&h=%s", payToAddress, amount, escURL, pkHash), nil
 }
 
+// ParseDogeConnectURI parses a dogeconnect: URI into its components.
+// Both the connect URL and the h parameter are required.
+func ParseDogeConnectURI(dogeconnectURI string) (res DogeURI, err error) {
+	u, err := url.Parse(dogeconnectURI)
+	if err != nil {
+		return DogeURI{}, fmt.Errorf("invalid url: cannot parse: %w", err)
+	}
+	if u.Scheme != "dogeconnect" {
+		return DogeURI{}, fmt.Errorf("invalid url: not a 'dogeconnect' url")
+	}
+	res.ConnectURL = u.Opaque
+	if res.ConnectURL == "" {
+		return DogeURI{}, fmt.Errorf("invalid url: missing connect URL")
+	}
+	h := u.Query().Get("h")
+	if h == "" {
+		return DogeURI{}, fmt.Errorf("invalid url: missing 'h' parameter")
+	}
+	res.PubKeyHash, err = base64.URLEncoding.DecodeString(h)
+	if err != nil {
+		return DogeURI{}, fmt.Errorf("invalid url: cannot decode 'h' parameter: %w", err)
+	}
+	if len(res.PubKeyHash) != 15 {
+		return DogeURI{}, fmt.Errorf("invalid url: 'h' must be 15 bytes, got %d", len(res.PubKeyHash))
+	}
+	return
+}
+
+// DogeConnectURI builds a dogeconnect: URI.
+// The connectURL should include the https:// prefix (which is stripped per spec).
+// pubKey must be a 32-byte BIP-340 X-only public key.
+func DogeConnectURI(connectURL string, pubKey []byte) (string, error) {
+	pkHash, err := pubKeyHashStr(pubKey)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(connectURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid connect URL: %w", err)
+	}
+	if u.Scheme != "https" {
+		return "", fmt.Errorf("invalid connect URL: must be an https URL")
+	}
+	q := u.Query()
+	q.Del("h") // h is reserved; drop any existing value from the base URL
+	q.Set("h", pkHash)
+	u.RawQuery = q.Encode()
+	withoutScheme := strings.TrimPrefix(u.String(), "https://")
+	return "dogeconnect:" + withoutScheme, nil
+}
+
 // pubKeyHashStr encodes the first 15 bytes of the SHA256 of the Gateway Public Key
 // in URL-safe Base64 (RFC 4648); 15 is divisible by 3, which avoids Base64 padding.
 func pubKeyHashStr(pubKey []byte) (string, error) {

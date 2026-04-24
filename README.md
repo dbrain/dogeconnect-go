@@ -24,7 +24,10 @@ payment := dogeconnectgo.ConnectPayment{
     VendorName: "Example Shop",
     Total:      "42.50000000",
     Items:      []dogeconnectgo.ConnectItem{ /* ... */ },
-    Outputs:    []dogeconnectgo.ConnectOutput{{Address: "D...", Amount: "42.50000000"}},
+    Outputs: []dogeconnectgo.ConnectOutput{
+        {Address: "D...", Amount: "42.50000000"},                    // p2pkh (default)
+        {Type: dogeconnectgo.OutputTypeData, Data: "deadbeef..."},  // OP_RETURN
+    },
 }
 
 envelope, err := dogeconnectgo.SignPaymentRequest(payment, privateKeyBytes)
@@ -70,18 +73,34 @@ if len(fieldErrs) > 0 {
 // parsed.TxBytes contains the decoded transaction
 ```
 
-### Generate and parse Dogecoin URIs
+### Generate and parse QR code URIs
+
+Two URI formats are supported.
+
+**`dogecoin:` URI** — includes a fallback address/amount for wallets without full DogeConnect support:
 
 ```go
-// Generate a QR-code URI with Connect parameters.
-uri, err := dogeconnectgo.DogecoinURI("D...", "42.50", "relay.example.com/pay/123", pubKeyBytes)
+// Generate.
+uri, err := dogeconnectgo.DogecoinURI("D...", "42.50", "https://relay.example.com/pay/123", pubKeyBytes)
 // → dogecoin:D...?amount=42.50&dc=relay.example.com%2Fpay%2F123&h=...
 
-// Parse a URI back.
+// Parse.
 parsed, err := dogeconnectgo.ParseDogecoinURI(uri)
 if parsed.IsConnectURI() {
     // fetch envelope from parsed.ConnectURL, verify with parsed.PubKeyHash
 }
+```
+
+**`dogeconnect:` URI** — for wallets requiring full DogeConnect support (no fallback address/amount):
+
+```go
+// Generate.
+uri, err := dogeconnectgo.DogeConnectURI("https://relay.example.com/pay/123", pubKeyBytes)
+// → dogeconnect:relay.example.com/pay/123?h=...
+
+// Parse.
+parsed, err := dogeconnectgo.ParseDogeConnectURI(uri)
+// fetch envelope from parsed.ConnectURL, verify with parsed.PubKeyHash
 ```
 
 ## Parsed Types
@@ -93,7 +112,7 @@ Each protocol type with complex fields has a `Parse()` method returning `(Parsed
 | `ConnectEnvelope` | `ParsedEnvelope` | `PayloadBytes`, `PubKeyBytes`, `SignatureBytes` |
 | `ConnectPayment` | `ParsedPayment` | `IssuedTime`, `TotalKoinu`, `FeePerKBKoinu`, `FeesKoinu`, `TaxesKoinu`, `ParsedItems`, `ParsedOutputs` |
 | `ConnectItem` | `ParsedItem` | `UnitCostKoinu`, `TotalKoinu`, `TaxKoinu` |
-| `ConnectOutput` | `ParsedOutput` | `AmountKoinu` |
+| `ConnectOutput` | `ParsedOutput` | `AmountKoinu` (p2pkh), `DataBytes` (data) |
 | `PaymentSubmission` | `ParsedSubmission` | `TxBytes` |
 | `PaymentStatusResponse` | `ParsedStatusResponse` | `TxIDBytes`, `ConfirmedAtTime` |
 

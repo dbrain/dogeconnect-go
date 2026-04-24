@@ -85,10 +85,20 @@ type ConnectItem struct {
 	Tax         string   `json:"tax"`   // tax on this item, 8-DP string (optional)
 }
 
+// OutputType is the type of a connect output.
+type OutputType string
+
+const (
+	OutputTypeP2PKH OutputType = "p2pkh" // Pay-to-public-key-hash (default)
+	OutputTypeData  OutputType = "data"  // OP_RETURN data output
+)
+
 // ConnectOutput is a transaction output the wallet must pay.
 type ConnectOutput struct {
-	Address string `json:"address"` // Dogecoin Address
-	Amount  string `json:"amount"`  // Amount, 8-DP string
+	Type    OutputType `json:"type,omitempty"`    // "p2pkh" (default) or "data"
+	Address string     `json:"address,omitempty"` // Dogecoin address (p2pkh)
+	Amount  string     `json:"amount,omitempty"`  // Amount, 8-DP string (p2pkh)
+	Data    string     `json:"data,omitempty"`    // Hex-encoded OP_RETURN payload (data)
 }
 
 // PaymentSubmission is the wallet's submission to the relay's pay endpoint.

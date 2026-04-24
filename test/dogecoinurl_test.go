@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	dogeconnectgo "github.com/dogeorg/dogeconnect-go"
@@ -77,6 +78,125 @@ func TestParseDogecoinURIErrors(t *testing.T) {
 				t.Errorf("expected error for %q, got nil", tc.uri)
 			}
 		})
+	}
+}
+
+func TestDogeConnectURI(t *testing.T) {
+	connectURL := "example.com/dc/xyz123"
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	expect := "dogeconnect:example.com/dc/xyz123?h=72b-LVh5K_mm7zyN9PXO"
+	uri, err := dogeconnectgo.DogeConnectURI("https://"+connectURL, pubKey)
+	if err != nil {
+		t.Fatalf("failed to build uri: %v", err)
+	}
+	if uri != expect {
+		t.Errorf("incorrect uri:\n%v (found)\n%v (expected)", uri, expect)
+	}
+	res, err := dogeconnectgo.ParseDogeConnectURI(uri)
+	if err != nil {
+		t.Fatalf("failed to parse uri: %v", err)
+	}
+	if !res.IsConnectURI() {
+		t.Errorf("IsConnectURI should return true")
+	}
+	if res.Address != "" {
+		t.Errorf("address should be empty, got %q", res.Address)
+	}
+	if res.Amount != "" {
+		t.Errorf("amount should be empty, got %q", res.Amount)
+	}
+	if res.ConnectURL != connectURL {
+		t.Errorf("wrong connect URL: %v vs %v", res.ConnectURL, connectURL)
+	}
+	pubSha := sha256.Sum256(pubKey)
+	if !bytes.Equal(res.PubKeyHash, pubSha[0:15]) {
+		t.Errorf("wrong pubkey hash:\n%x vs\n%x", res.PubKeyHash, pubSha[0:15])
+	}
+}
+
+func TestDogeConnectURIStripsHTTPS(t *testing.T) {
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	uri, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1", pubKey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	res, err := dogeconnectgo.ParseDogeConnectURI(uri)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if res.ConnectURL != "example.com/dc/1" {
+		t.Errorf("expected stripped URL, got %q", res.ConnectURL)
+	}
+}
+
+func TestParseDogeConnectURIErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		uri  string
+	}{
+		{"wrong scheme", "dogecoin:DPD7uK4B1kRmbfGmytBhG1DZjaMWNfbpwY?amount=1"},
+		{"missing connect url", "dogeconnect:?h=72b-LVh5K_mm7zyN9PXO"},
+		{"missing h", "dogeconnect:example.com/dc/xyz123"},
+		{"bad base64 h", "dogeconnect:example.com/dc/xyz123?h=!!!invalid!!!"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := dogeconnectgo.ParseDogeConnectURI(tc.uri)
+			if err == nil {
+				t.Errorf("expected error for %q, got nil", tc.uri)
+			}
+		})
+	}
+}
+
+func TestDogeConnectURIWithQueryParams(t *testing.T) {
+	// connectURL already has a query string — existing params must be preserved and h appended
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	expect := "dogeconnect:example.com/dc/1?foo=bar&h=72b-LVh5K_mm7zyN9PXO"
+	uri, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1?foo=bar", pubKey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if uri != expect {
+		t.Errorf("incorrect uri:\n%v (found)\n%v (expected)", uri, expect)
+	}
+	if strings.Count(uri, "?") != 1 {
+		t.Errorf("expected exactly one '?' in URI: %q", uri)
+	}
+}
+
+func TestDogeConnectURIDropsExistingH(t *testing.T) {
+	// if the base URL already contains an 'h' param it must be replaced by ours
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	expect := "dogeconnect:example.com/dc/1?h=72b-LVh5K_mm7zyN9PXO"
+	uri, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1?h=shouldbedropped", pubKey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if uri != expect {
+		t.Errorf("incorrect uri:\n%v (found)\n%v (expected)", uri, expect)
+	}
+}
+
+func TestDogeConnectURINotHTTPS(t *testing.T) {
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	_, err := dogeconnectgo.DogeConnectURI("http://example.com/dc/1", pubKey)
+	if err == nil {
+		t.Error("expected error for non-https URL, got nil")
+	}
+}
+
+func TestDogeConnectURIBadPubKey(t *testing.T) {
+	_, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1", []byte{1, 2, 3})
+	if err == nil {
+		t.Error("expected error for short pubkey, got nil")
+	}
+}
+
+func TestDogecoinURIBadPubKey(t *testing.T) {
+	_, err := dogeconnectgo.DogecoinURI("DPD7uK4B1kRmbfGmytBhG1DZjaMWNfbpwY", "1.0", "https://example.com/dc/1", []byte{1, 2, 3})
+	if err == nil {
+		t.Error("expected error for short pubkey, got nil")
 	}
 }
 
