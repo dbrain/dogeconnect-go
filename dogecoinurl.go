@@ -116,6 +116,7 @@ func DogeConnectURI(connectURL string, pubKey []byte) (string, error) {
 		return "", fmt.Errorf("invalid connect URL: must be an https URL")
 	}
 	q := u.Query()
+	q.Del("h") // h is reserved; drop any existing value from the base URL
 	q.Set("h", pkHash)
 	u.RawQuery = q.Encode()
 	withoutScheme := strings.TrimPrefix(u.String(), "https://")

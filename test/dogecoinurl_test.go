@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	dogeconnectgo "github.com/dogeorg/dogeconnect-go"
@@ -149,25 +150,31 @@ func TestParseDogeConnectURIErrors(t *testing.T) {
 }
 
 func TestDogeConnectURIWithQueryParams(t *testing.T) {
-	// connectURL already has a query string — must not produce a double-? URI
+	// connectURL already has a query string — existing params must be preserved and h appended
 	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	expect := "dogeconnect:example.com/dc/1?foo=bar&h=72b-LVh5K_mm7zyN9PXO"
 	uri, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1?foo=bar", pubKey)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// must be parseable (validates the URI is well-formed)
-	if _, err := dogeconnectgo.ParseDogeConnectURI(uri); err != nil {
-		t.Errorf("produced unparseable URI %q: %v", uri, err)
+	if uri != expect {
+		t.Errorf("incorrect uri:\n%v (found)\n%v (expected)", uri, expect)
 	}
-	// must contain exactly one '?'
-	count := 0
-	for _, c := range uri {
-		if c == '?' {
-			count++
-		}
+	if strings.Count(uri, "?") != 1 {
+		t.Errorf("expected exactly one '?' in URI: %q", uri)
 	}
-	if count != 1 {
-		t.Errorf("expected exactly one '?' in URI, got %d: %q", count, uri)
+}
+
+func TestDogeConnectURIDropsExistingH(t *testing.T) {
+	// if the base URL already contains an 'h' param it must be replaced by ours
+	pubKey, _ := hex.DecodeString("6c52b17752f469c5411b977ba64725d40174d16e780b709b2aff68e0f5abfc50")
+	expect := "dogeconnect:example.com/dc/1?h=72b-LVh5K_mm7zyN9PXO"
+	uri, err := dogeconnectgo.DogeConnectURI("https://example.com/dc/1?h=shouldbedropped", pubKey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if uri != expect {
+		t.Errorf("incorrect uri:\n%v (found)\n%v (expected)", uri, expect)
 	}
 }
 
